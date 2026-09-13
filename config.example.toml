@@ -1,0 +1,20 @@
+# Copy this file to config.toml and edit it for your environment.
+
+[paths]
+llama_server = "~/llm/llama.cpp/build/bin/llama-server"
+llama_model = "~/llm/model.gguf"
+voicevox_run = "~/voicevox/run"
+
+[ic_recorder]
+directory = "/media/YOUR_USER/IC RECORDER/VOICE/A/"
+file_pattern = "*.mp3"
+
+[client]
+server_host = "192.168.1.100"
+voice_port = 50000
+schedule_port = 8766
+
+[services]
+voicevox_url = "http://127.0.0.1:50021"
+local_llm_base_url = "http://127.0.0.1:8080/v1"
+schedule_url = "http://127.0.0.1:8766/today"

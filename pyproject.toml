@@ -1,0 +1,28 @@
+[project]
+name = "flet-schedule-secretary-voice"
+version = "0.1.0"
+description = "Flet daily schedule UI with secretary overlay and VAD voice conversation"
+requires-python = ">=3.12"
+dependencies = [
+    "flet==0.85.3",
+]
+
+[tool.flet]
+product = "AI Secretary Schedule"
+permissions = ["microphone"]
+
+[tool.flet.app]
+path = "src"
+module = "main.py"
+
+[tool.flet.android]
+dependencies = [
+    "pyjnius",
+]
+
+[tool.flet.android.permission]
+"android.permission.RECORD_AUDIO" = true
+"android.permission.INTERNET" = true
+
+[tool.flet.android.manifest_application]
+usesCleartextTraffic = "true"
