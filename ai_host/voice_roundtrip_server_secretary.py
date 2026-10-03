@@ -27,6 +27,7 @@ import socket
 import struct
 import threading
 import wave
+import tomllib
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,40 @@ from faster_whisper import WhisperModel
 from openai import OpenAI
 
 
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = Path(os.getenv("AI_SECRETARY_CONFIG", str(ROOT / "config.toml"))).expanduser()
+
+
+def load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        return {}
+    with CONFIG_PATH.open("rb") as f:
+        return tomllib.load(f)
+
+
+CONFIG = load_config()
+WHISPER_CONFIG = CONFIG.get("whisper", {})
+WHISPER_COMPUTE_TYPE = str(WHISPER_CONFIG.get("compute_type", "float16"))
+CHARACTER_CONFIG = CONFIG.get("character", {})
+CHARACTER_DIR = ROOT / str(CHARACTER_CONFIG.get("directory", ""))
+CHARACTER_PROMPT_FILE = str(CHARACTER_CONFIG.get("prompt_file", "")).strip()
+
+
+def load_character_prompt() -> str:
+    """config.toml で指定されたキャラクター固有プロンプトを読む。"""
+    if not CHARACTER_PROMPT_FILE:
+        return ""
+    path = CHARACTER_DIR / CHARACTER_PROMPT_FILE
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        print(f"⚠️ キャラクタープロンプトを読めません: {path}: {exc}")
+        return ""
+
+
+CHARACTER_PROMPT = load_character_prompt()
+
+
 HOST = "0.0.0.0"
 PORT = 50000
 
@@ -49,13 +84,13 @@ SAMPLE_WIDTH = 2
 SAVE_DIR = Path("received_audio")
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
-whisper = WhisperModel("small", device="cuda", compute_type="float16")
+whisper = WhisperModel("small", device="cuda", compute_type=WHISPER_COMPUTE_TYPE)
 
 conversation_history = deque(maxlen=8)
 history_lock = threading.Lock()
 
 VOICEVOX_HOST = os.environ.get("VOICEVOX_HOST", "http://127.0.0.1:50021")
-VOICEVOX_SPEAKER = int(os.environ.get("VOICEVOX_SPEAKER", "30"))
+VOICEVOX_SPEAKER = int(os.environ.get("VOICEVOX_SPEAKER", str(CHARACTER_CONFIG.get("voicevox_speaker", 30))))
 VOICEVOX_SPEED = float(os.environ.get("VOICEVOX_SPEED", "1.0"))
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4")
 LOCAL_LLM_BASE_URL = os.environ.get("LOCAL_LLM_BASE_URL", "http://127.0.0.1:8080/v1")
@@ -753,17 +788,23 @@ def _build_chat_messages(user_text: str) -> list[dict]:
         {
             "role": "system",
             "content": (
-                "あなたは個人用AI秘書です。"
-                "返答は日本語で、親しみはあるが落ち着いた自然な会話口調にしてください。"
-                "原則として2〜4文程度で簡潔に答えてください。"
-                "箇条書きや見出しは使わず、音声で聞いて自然な返答にしてください。"
-                "直前までの会話文脈を踏まえて返答してください。"
-                "予定の開始・終了時刻の変更は専用処理で反映されます。"
-                "専用処理で扱えない複雑な予定変更については、勝手に変更したと断言しないでください。"
-                "下に現在日時と今日の時間割を与えます。予定について聞かれた場合は、"
-                "必ずこの時間割を根拠に答え、存在しない予定を作らないでください。"
-                "『1時』のような時刻表現は会話文脈と時間割から自然に解釈してください。"
-                "完了済みかどうかも必要に応じて反映してください。\n\n"
+                (
+                    CHARACTER_PROMPT + "\n\n"
+                    if CHARACTER_PROMPT
+                    else (
+                        "あなたは個人用AI秘書です。"
+                        "返答は日本語で、親しみはあるが落ち着いた自然な会話口調にしてください。"
+                        "原則として2〜4文程度で簡潔に答えてください。"
+                        "箇条書きや見出しは使わず、音声で聞いて自然な返答にしてください。"
+                        "直前までの会話文脈を踏まえて返答してください。"
+                    )
+                )
+                + "予定の開始・終了時刻の変更は専用処理で反映されます。"
+                + "専用処理で扱えない複雑な予定変更については、勝手に変更したと断言しないでください。"
+                + "下に現在日時と今日の時間割を与えます。予定について聞かれた場合は、"
+                + "必ずこの時間割を根拠に答え、存在しない予定を作らないでください。"
+                + "『1時』のような時刻表現は会話文脈と時間割から自然に解釈してください。"
+                + "完了済みかどうかも必要に応じて反映してください。\n\n"
                 + schedule_context
             ),
         }
@@ -1093,7 +1134,7 @@ def main() -> None:
     print("=== 1日の時間割 + AI秘書 音声会話サーバー v2 ===")
     print(f"待受: {HOST}:{PORT}")
     print(f"PCM形式: {SAMPLE_RATE} Hz / 16 bit / mono")
-    print("Whisper: small / CUDA / float16")
+    print(f"Whisper: small / CUDA / {WHISPER_COMPUTE_TYPE}")
     if LLM_BACKEND == "local":
         print(f"LLM: local / {LOCAL_LLM_BASE_URL} / model={LOCAL_LLM_MODEL}")
     else:

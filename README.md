@@ -13,6 +13,8 @@ OpenAI APIとllama.cppによるローカルLLMの両方に対応している。
 - ICレコーダーの録音をWhisperで文字起こしし、LLMでMarkdownと予定JSONを生成。
 - 予定をSQLiteのデータベースに保存し、HTTPサーバーから各クライアントへ配信。
 - Android、Windows、UbuntuのFletクライアントで時間割と秘書キャラクターを表示。
+- `config.toml` からキャラクター画像、プロンプト、VOICEVOX話者を切り替えが可能。
+- GPUに合わせてllama.cppのコンテキスト長・GPUオフロード層数、faster-whisperの計算型を設定可能。
 - faster-whisperで音声を認識し、OpenAI APIまたはローカルLLMで会話。
 - VOICEVOXによる音声応答、口パク表示、予定開始前のリマインダー。
 - GUIと音声による予定の追加・時間変更・完了記録。
@@ -46,7 +48,7 @@ Ubuntuサーバー
 
 | 用途 | 作者の環境・使用技術 |
 | --- | --- |
-| サーバー | Ubuntu 24.04 LTS + NVIDIA GPU |
+| サーバー | Ubuntu 24.04 LTS + NVIDIA GPU / Ubuntu 26.04.1 + Tesla P100 16GBでも動作確認|
 | Python | プロジェクトの指定は3.12以上。作者の厳密な実行バージョンは公開前に確認 |
 | メインクライアント | Androidタブレット |
 | その他のクライアント | Windows 11 / Ubuntu |
@@ -69,7 +71,8 @@ Ubuntuサーバー
 | `src/audio_backend.py` | OS別の音声入出力 |
 | `src/vad_recorder.py` | 発話区間検出 |
 | `config.example.toml` | 環境設定の公開サンプル |
-| `generate_client_config.py` | APK用設定の生成 |
+| `generate_client_config.py` | APK用の接続先・キャラクター設定の生成 |
+| `build_character_apk.sh` | `config.toml` のキャラクター画像・アイコンを使ったAPKビルド |
 
 ## 最初に行う設定
 
@@ -102,18 +105,91 @@ schedule_port = 8766
 voicevox_url = "http://127.0.0.1:50021"
 local_llm_base_url = "http://127.0.0.1:8080/v1"
 schedule_url = "http://127.0.0.1:8766/today"
+
+# 必要な場合だけ指定する。省略時はプログラム側の既定値を使用する。
+[llm]
+ctx_size = 8192
+ngl = 99
+
+[whisper]
+compute_type = "float32"
+
+[character]
+directory = "butler_character"
+normal_image = "butler_normal.png"
+talking_image = "butler_mouth_open.png"
+happy_image = "butler_happy.png"
+warning_image = "butler_warning.png"
+icon_image = "butler_icon.png"
+prompt_file = "prompt.txt"
+voicevox_speaker = 11
 ```
 
 `~` はホームディレクトリを表す。
 `YOUR_USER` やIPアドレスは自分の環境に置き換えること。
-`[client]` のIPは、Androidなどから到達できるサーバーのLANアドレスである。
+`[client]` のIPは、Androidなどから到達できるサーバーのLANアドレス。
 `127.0.0.1` はそのプログラム自身が動くマシンを指す。
 
-`start_ai_secretary.py` と `ic_recorder_schedule.py` はこの設定を読み込む。
+`start_ai_secretary.py`、`ic_recorder_schedule.py`、音声会話サーバー、クライアント関連スクリプトが必要な設定を読み込む。
 環境変数 `AI_SECRETARY_CONFIG` で別のTOMLファイルを指定することもできる。
 ICレコーダーの場所は `IC_RECORDER_DIR`、検索パターンは `IC_RECORDER_PATTERN` で上書きできる。
 既存の環境変数を優先する箇所もあるため、設定が反映されない場合は環境変数を確認すること。
 
+### GPU・ローカルLLM設定（任意）
+
+`[llm]` と `[whisper]` は任意設定である。指定しなければ従来のプログラム側既定値を使用するため、通常の環境では追加しなくてもよい。
+
+Tesla P100 16GBを使用している作者環境では、次の設定で動作確認済みである。
+
+```toml
+[llm]
+ctx_size = 8192
+ngl = 99
+
+[whisper]
+compute_type = "float32"
+```
+
+`ctx_size` は `llama-server` の `--ctx-size`、`ngl` は `-ngl` に渡される。`compute_type` は音声会話サーバーの faster-whisper に渡される。
+P100では上記のように `float32` を使用する。一方、これらの項目を省略した場合は従来の既定値（`ctx_size=24576`、`ngl=10`、`compute_type="float16"`）を使用する。GPUのVRAM容量や対応する演算形式に応じて調整すること。
+
+### オリジナルキャラクター設定
+
+キャラクターの画像、LLMへ与えるキャラクタープロンプト、VOICEVOXの話者IDを `config.toml` から切り替えられる。たとえば男性執事キャラクターを使う場合は次のようにする。
+
+```toml
+[character]
+directory = "butler_character"
+
+normal_image = "butler_normal.png"
+talking_image = "butler_mouth_open.png"
+happy_image = "butler_happy.png"
+warning_image = "butler_warning.png"
+icon_image = "butler_icon.png"
+
+prompt_file = "prompt.txt"
+voicevox_speaker = 11
+```
+
+`directory` はプロジェクトルートからの相対パスとして扱う。上の例では次のように配置する。
+
+```text
+flet_ai_secretary/
+├── config.toml
+├── butler_character/
+│   ├── prompt.txt
+│   ├── butler_normal.png
+│   ├── butler_mouth_open.png
+│   ├── butler_happy.png
+│   ├── butler_warning.png
+│   └── butler_icon.png
+├── ai_host/
+└── src/
+```
+
+`prompt.txt` には、口調、呼び方、性格などキャラクター固有の指示を書く。予定データを捏造しないことや予定変更処理など、AI秘書として必要な基本ルールはプログラム側に保持する。
+
+画像とプロンプトを別ディレクトリにまとめておけば、`directory` と各ファイル名、`voicevox_speaker` を変更することで別のキャラクターへ切り替えられる。VOICEVOXの話者を利用する場合は、その音声・キャラクターの利用規約も確認すること。
 ## Android用クライアントの設定
 
 Androidが現在のメイン・クライアントである。
@@ -146,16 +222,27 @@ dependencies = [
 
 ### APK作成
 
-プロジェクトのルートディレクトリで、
+アイコン画像を変更しない場合は、APKはPC側の `config.toml` を実行時に直接参照できないため、ビルド前に `generate_client_config.py` を実行し、`[client]` とAPKで必要なキャラクター設定を `src/client_config.py` に埋め込む。
 
 ```bash
-$ cd ~/flet_ai_secretary
-
 $ python3 generate_client_config.py
 $ flet build apk
 ```
 
-を実行する。
+キャラクター画像ともに、アイコン画像も変更する場合は 下記のようにビルドする。
+
+```bash
+$ cd ~/flet_ai_secretary
+$ ./build_character_apk.sh
+```
+
+生成されたファイルがAPKに組み込まれる。
+サーバーIPやAPKへ組み込むキャラクターを変更した場合は、設定を変更して再生成・再ビルドすること。
+Ubuntu/Windowsでソースから直接起動する場合は、プロジェクト直下の `config.toml` を読み込む。
+現時点ではAndroidアプリ内で設定を永続保存する機能はない。
+
+`config.toml` と生成された `src/client_config.py` は `.gitignore` の対象だ。
+公開するのは `config.example.toml`、`src/client_config.example.py`、生成スクリプトである。
 
 なお、初回ビルドは必要なツールをダウンロードするため、インターネット接続が必要である。
 
@@ -176,8 +263,6 @@ build/apk/flet-schedule-secretary-voice.apk
 が生成される。
 
 ### Android タブレットやスマホに APK をインストール
-
-Andorid タブレット・スマホに入れる。
 
 - Android タブレット・スマホに入れる。
 - Android タブレット・スマホの設定・情報・ビルド番号を7回叩き
@@ -246,6 +331,7 @@ $ wget https://github.com/VOICEVOX/voicevox_engine/releases/download/0.23.0/voic
 $ sudo apt install 7zip
 $ 7z x voicevox_engine-linux-cpu-x64-0.23.0.vvpp
 ```
+
 個別に、サーバーを起動する場合には、下記のように VOICEVOX を起動する。
 後述するように start_ai_secretary.py を使って、一括起動する場合は、VOICEVOX の個別起動は必要ない。
 
@@ -254,7 +340,7 @@ $ cd ~/voicevox
 $ ./run 
 ```
 
-## AI (LLM) 
+## AI (LLM)
 
 AI秘書では、クラウド AI である OpenAI APIとローカルLLMの両方を使用できる。
 
@@ -312,17 +398,19 @@ voicevox_run = "~/voicevox/run"
 
 ```bash
 $ ~/llm/llama.cpp/build/bin/llama-server -m ~/llm/gpt-oss-20b-Q5_K_M.gguf \
-   --jinja   --reasoning-format auto   --ctx-size 24576   --temp 1.0   --top-p 1.0 \
-   -ngl 10   --host 0.0.0.0   --port 8080   --timeout 3600
+   --jinja --reasoning-format auto --ctx-size 24576 --temp 1.0   --top-p 1.0 \
+   -ngl 10 --host 0.0.0.0 --port 8080 --timeout 3600
 ```
+
 使用する `llama-server` とGGUFモデルの場所は、環境に合わせて設定すること。
+
+Tesla P100など、標準設定と異なるGPUを使う場合は、前述の `[llm]` と `[whisper]` を `config.toml` に追加して調整できる。これにより、P100対応のためだけに `start_ai_secretary.py`、`ic_recorder_schedule.py`、`voice_roundtrip_server_secretary.py` を直接書き換える必要はない。
 
 また、別ウィンドウで
 
 ```bash
 $ python3 ai_host/voice_roundtrip_server_secretary.py
 ```
-
 
 後述するように start_ai_secretary.py を使って、一括起動する場合は、ローカルLLMの個別起動は必要ない。
 
@@ -488,7 +576,7 @@ IC RECORDER/
 元ファイル名は日付と連番を含む `YYMMDD_NNN.mp3` 形式の例である。
 `260913_001.mp3` は2026年9月13日の録音ファイルの例だ。
 
-作者のマウント先は `/media/HOGE/IC RECORDER/VOICE/A/` だが、利用者のユーザー名・OS・機種・マウント方法によって異なる。
+作者のマウント先は `/media/YOUR_USER/IC RECORDER/VOICE/A/` だが、利用者のユーザー名・OS・機種・マウント方法によって異なる。
 `config.toml` の `directory` と `file_pattern` を変更すること。
 現在の実装では `*.mp3` を既定の検索パターンとしている。
 WAVなど別形式への対応は、Whisperが読み込めることに加えて、取り込み処理側の対応も確認する必要がある。
@@ -584,7 +672,7 @@ Android、Windows、Ubuntuの各クライアントから、AI秘書サーバー�
 | `DAILY_PLAN_DIR` | 予定生成ファイルの出力先 |
 | `SCHEDULE_URL` | 時間割サーバーの `/today` URL |
 | `VOICEVOX_HOST` | VOICEVOX EngineのURL |
-| `VOICEVOX_SPEAKER` | VOICEVOXの話者ID（既定30） |
+| `VOICEVOX_SPEAKER` | VOICEVOXの話者ID。設定されている場合は環境変数を優先し、通常は `[character].voicevox_speaker` でも指定できる |
 | `LLM_BASE_URL` / `LOCAL_LLM_BASE_URL` | ローカルLLMの接続先 |
 | `LLAMA_SERVER_BIN` / `LLM_MODEL_FILE` | ローカルLLMの実行ファイル・モデル |
 
@@ -605,7 +693,6 @@ AC電源接続中に画面を常時表示できる。
 設定項目の名称や場所はAndroidのバージョン・端末メーカーによって異なる。
 長時間の常時表示では発熱や画面の焼き付きなどにも注意すること。
 
-
 ## ライセンスと第三者ソフトウェア
 
 本リポジトリでは、プログラムコードとイラストに異なるライセンスを適用している。
@@ -616,7 +703,7 @@ AC電源接続中に画面を常時表示できる。
 
 Copyright 2026 Atsushi Noda
 
-ライセンスの詳細については、本リポジトリの `LICENSE` ファイルを参照してください。
+ライセンスの詳細については、本リポジトリの `LICENSE` ファイルを参照すること。
 
 ### イラスト
 
@@ -624,9 +711,9 @@ Copyright 2026 Atsushi Noda
 
 Copyright 2026 Atsushi Noda
 
-イラストの複製、配布、改変等は、CC BY-NC 4.0 の条件に従う限り可能です。利用する際は、作者名（Atsushi Noda）を表示してください。
+イラストの複製、配布、改変等は、CC BY-NC 4.0 の条件に従う限り可能。利用する際は、作者名（Atsushi Noda）を表示すること。
 
-商用目的での利用は、CC BY-NC 4.0 の許諾範囲には含まれません。商用利用を希望する場合は、作者から別途許可を得てください。
+商用目的での利用は、CC BY-NC 4.0 の許諾範囲には含まれない。商用利用を希望する場合は、作者から別途許可を得ること。
 
 CC BY-NC 4.0 の詳細：
 https://creativecommons.org/licenses/by-nc/4.0/
@@ -640,7 +727,7 @@ VOICEVOXの音声・キャラクターの利用規約も別途確認すること
 ## 開発状況・既知の制約
 
 - 作者の日常使用を通じて改良中のプロトタイプだ。未確認のOS・GPU・ライブラリの組み合わせについて動作保証はない。
-- 現在の音声会話サーバーはfaster-whisperをCUDA/float16で使用するため、現状のコードではNVIDIA GPU環境が必要。CPUフォールバックは今後の検討事項だ。
+- 現在の音声会話サーバーはfaster-whisperをCUDAで使用する。`[whisper].compute_type` で計算型を変更でき、作者のTesla P100環境では `float32` を使用している。CPUフォールバックは今後の検討事項だ。
 - Androidのサーバー接続先はビルド時に設定を埋め込む方式だ。アプリ内での永続的な設定変更は今後の課題である。
 - 現在のサーバーは信頼できるLAN内での利用を想定している。認証や暗号化を備えたインターネット公開用サービスではない。
 - ICレコーダーの保存先・命名規則・音声形式は機種依存である。すべての機種での動作は確認していない。

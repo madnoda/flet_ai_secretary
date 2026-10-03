@@ -41,11 +41,19 @@ try:
         AI_HOST as _BUILTIN_AI_HOST,
         VOICE_PORT as _BUILTIN_VOICE_PORT,
         SCHEDULE_PORT as _BUILTIN_SCHEDULE_PORT,
+        CHARACTER_NORMAL as _BUILTIN_CHARACTER_NORMAL,
+        CHARACTER_TALKING as _BUILTIN_CHARACTER_TALKING,
+        CHARACTER_HAPPY as _BUILTIN_CHARACTER_HAPPY,
+        CHARACTER_WARNING as _BUILTIN_CHARACTER_WARNING,
     )
 except Exception:
     _BUILTIN_AI_HOST = "127.0.0.1"
     _BUILTIN_VOICE_PORT = 50000
     _BUILTIN_SCHEDULE_PORT = 8766
+    _BUILTIN_CHARACTER_NORMAL = "secretary_normal.png"
+    _BUILTIN_CHARACTER_TALKING = "secretary_mouth_open.png"
+    _BUILTIN_CHARACTER_HAPPY = "secretary_happy.png"
+    _BUILTIN_CHARACTER_WARNING = "secretary_warning.png"
 
 
 def _load_desktop_client_config() -> dict:
@@ -59,13 +67,15 @@ def _load_desktop_client_config() -> dict:
         if path.exists():
             try:
                 with path.open("rb") as f:
-                    return tomllib.load(f).get("client", {})
+                    return tomllib.load(f)
             except Exception:
                 pass
     return {}
 
 
-_CLIENT_CONFIG = _load_desktop_client_config()
+_DESKTOP_CONFIG = _load_desktop_client_config()
+_CLIENT_CONFIG = _DESKTOP_CONFIG.get("client", {})
+_CHARACTER_CONFIG = _DESKTOP_CONFIG.get("character", {})
 AI_HOST = str(_CLIENT_CONFIG.get("server_host", _BUILTIN_AI_HOST))
 PORT = int(_CLIENT_CONFIG.get("voice_port", _BUILTIN_VOICE_PORT))
 SCHEDULE_HOST = AI_HOST
@@ -78,10 +88,20 @@ TEXT_REQUEST_MARKER = 0xFFFFFFFF
 SCHEDULE_NOTIFY_MINUTES = 5
 SCHEDULE_NOTIFY_POLL_SECONDS = 20
 
-SECRETARY_NORMAL = "secretary_normal.png"
-SECRETARY_TALKING = "secretary_mouth_open.png"
-SECRETARY_HAPPY = "secretary_happy.png"      # 今回は未使用。将来用
-SECRETARY_WARNING = "secretary_warning.png"  # 今回は未使用。将来用
+def _character_image(config_key: str, builtin_name: str) -> str:
+    """Desktopではcharacter.directoryを直接参照し、APKでは埋込みassets名を使う。"""
+    image_name = str(_CHARACTER_CONFIG.get(config_key, builtin_name))
+    directory = str(_CHARACTER_CONFIG.get("directory", "")).strip()
+    if directory and _DESKTOP_CONFIG:
+        project_root = Path(__file__).resolve().parents[1]
+        return str(project_root / directory / image_name)
+    return image_name
+
+
+SECRETARY_NORMAL = _character_image("normal_image", _BUILTIN_CHARACTER_NORMAL)
+SECRETARY_TALKING = _character_image("talking_image", _BUILTIN_CHARACTER_TALKING)
+SECRETARY_HAPPY = _character_image("happy_image", _BUILTIN_CHARACTER_HAPPY)      # 今回は未使用。将来用
+SECRETARY_WARNING = _character_image("warning_image", _BUILTIN_CHARACTER_WARNING)  # 今回は未使用。将来用
 SECRETARY_WIDTH = 150
 SECRETARY_TALK_INTERVAL = 0.25  # 秒。口の開閉切替周期
 

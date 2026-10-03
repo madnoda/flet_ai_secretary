@@ -54,6 +54,10 @@ def load_config() -> dict:
 CONFIG = load_config()
 PATHS_CONFIG = CONFIG.get("paths", {})
 SERVICES_CONFIG = CONFIG.get("services", {})
+LLM_CONFIG = CONFIG.get("llm", {})
+
+LLM_CTX_SIZE = int(LLM_CONFIG.get("ctx_size", 24576))
+LLM_NGL = int(LLM_CONFIG.get("ngl", 10))
 
 DEFAULT_LLAMA_SERVER = Path(PATHS_CONFIG.get(
     "llama_server", Path.home() / "llm/llama.cpp/build/bin/llama-server"
@@ -230,10 +234,10 @@ def main() -> int:
                     "-m", str(model),
                     "--jinja",
                     "--reasoning-format", "auto",
-                    "--ctx-size", "24576",
+                    "--ctx-size", str(LLM_CTX_SIZE),
                     "--temp", "1.0",
                     "--top-p", "1.0",
-                    "-ngl", "10",
+                    "-ngl", str(LLM_NGL),
                     "--host", "0.0.0.0",
                     "--port", "8080",
                     "--timeout", "3600",

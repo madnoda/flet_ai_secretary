@@ -46,6 +46,10 @@ CONFIG = load_config()
 IC_CONFIG = CONFIG.get("ic_recorder", {})
 PATHS_CONFIG = CONFIG.get("paths", {})
 SERVICES_CONFIG = CONFIG.get("services", {})
+LLM_CONFIG = CONFIG.get("llm", {})
+
+LLM_CTX_SIZE = int(LLM_CONFIG.get("ctx_size", 24576))
+LLM_NGL = int(LLM_CONFIG.get("ngl", 10))
 
 IC_RECORDER_DIR = Path(os.getenv(
     "IC_RECORDER_DIR",
@@ -75,9 +79,9 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "12000"))
 LLAMA_SERVER_CMD = [
     os.getenv("LLAMA_SERVER_BIN", str(Path(PATHS_CONFIG.get("llama_server", Path.home() / "llm/llama.cpp/build/bin/llama-server")).expanduser())),
     "-m", os.getenv("LLM_MODEL_FILE", str(Path(PATHS_CONFIG.get("llama_model", Path.home() / "llm/gpt-oss-20b-Q5_K_M.gguf")).expanduser())),
-    "--jinja", "--reasoning-format", "auto", "--ctx-size", "24576",
+    "--jinja", "--reasoning-format", "auto", "--ctx-size", str(LLM_CTX_SIZE),
     "--temp", "1.0", "--top-p", "1.0",
-    "-ngl", "10", "--host", "0.0.0.0", "--port", "8080", "--timeout", "3600",
+    "-ngl", str(LLM_NGL), "--host", "0.0.0.0", "--port", "8080", "--timeout", "3600",
 ]
 
 DEFAULT_GLOSSARY: dict[str, list[str]] = {
