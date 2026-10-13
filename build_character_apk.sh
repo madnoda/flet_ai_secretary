@@ -20,6 +20,9 @@ print(str(c.get("talking_image", "secretary_mouth_open.png")))
 print(str(c.get("happy_image", "secretary_happy.png")))
 print(str(c.get("warning_image", "secretary_warning.png")))
 print(str(c.get("icon_image", "icon.png")))
+print(str(c.get("image_scale", 1.0)))
+print(str(c.get("image_offset_x", 0)))
+print(str(c.get("image_offset_y", 0)))
 PYCFG
 )
 
@@ -29,6 +32,9 @@ TALKING_IMAGE="${CHARACTER_CFG[2]}"
 HAPPY_IMAGE="${CHARACTER_CFG[3]}"
 WARNING_IMAGE="${CHARACTER_CFG[4]}"
 ICON_IMAGE="${CHARACTER_CFG[5]}"
+IMAGE_SCALE="${CHARACTER_CFG[6]}"
+IMAGE_OFFSET_X="${CHARACTER_CFG[7]}"
+IMAGE_OFFSET_Y="${CHARACTER_CFG[8]}"
 
 if [ -n "$CHARACTER_DIR" ]; then
     CHARACTER_PATH="$PROJECT_DIR/$CHARACTER_DIR"
@@ -43,6 +49,7 @@ fi
 
 echo "プロジェクト: $PROJECT_DIR"
 echo "一時ビルド領域: $BUILD_TMP"
+echo "キャラクター表示: scale=$IMAGE_SCALE offset_x=$IMAGE_OFFSET_X offset_y=$IMAGE_OFFSET_Y"
 
 cp -a "$PROJECT_DIR/." "$BUILD_TMP/"
 cd "$BUILD_TMP"

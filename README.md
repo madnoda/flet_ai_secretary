@@ -123,6 +123,9 @@ warning_image = "butler_warning.png"
 icon_image = "butler_icon.png"
 prompt_file = "prompt.txt"
 voicevox_speaker = 11
+image_scale = 2.3
+image_offset_x = 100
+image_offset_y = -50
 ```
 
 `~` はホームディレクトリを表す。
@@ -169,6 +172,10 @@ icon_image = "butler_icon.png"
 
 prompt_file = "prompt.txt"
 voicevox_speaker = 11
+
+image_scale = 2.3
+image_offset_x = 100
+image_offset_y = -50
 ```
 
 `directory` はプロジェクトルートからの相対パスとして扱う。上の例では次のように配置する。
@@ -233,6 +240,7 @@ $ flet build apk
 
 ```bash
 $ cd ~/flet_ai_secretary
+$ python3 generate_client_config.py
 $ ./build_character_apk.sh
 ```
 

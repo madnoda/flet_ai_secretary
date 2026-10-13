@@ -45,6 +45,9 @@ try:
         CHARACTER_TALKING as _BUILTIN_CHARACTER_TALKING,
         CHARACTER_HAPPY as _BUILTIN_CHARACTER_HAPPY,
         CHARACTER_WARNING as _BUILTIN_CHARACTER_WARNING,
+        CHARACTER_IMAGE_SCALE as _BUILTIN_IMAGE_SCALE,
+        CHARACTER_IMAGE_OFFSET_X as _BUILTIN_IMAGE_OFFSET_X,
+        CHARACTER_IMAGE_OFFSET_Y as _BUILTIN_IMAGE_OFFSET_Y,
     )
 except Exception:
     _BUILTIN_AI_HOST = "127.0.0.1"
@@ -54,6 +57,9 @@ except Exception:
     _BUILTIN_CHARACTER_TALKING = "secretary_mouth_open.png"
     _BUILTIN_CHARACTER_HAPPY = "secretary_happy.png"
     _BUILTIN_CHARACTER_WARNING = "secretary_warning.png"
+    _BUILTIN_IMAGE_SCALE = 1.0
+    _BUILTIN_IMAGE_OFFSET_X = 0.0
+    _BUILTIN_IMAGE_OFFSET_Y = 0.0
 
 
 def _load_desktop_client_config() -> dict:
@@ -103,6 +109,10 @@ SECRETARY_TALKING = _character_image("talking_image", _BUILTIN_CHARACTER_TALKING
 SECRETARY_HAPPY = _character_image("happy_image", _BUILTIN_CHARACTER_HAPPY)      # 今回は未使用。将来用
 SECRETARY_WARNING = _character_image("warning_image", _BUILTIN_CHARACTER_WARNING)  # 今回は未使用。将来用
 SECRETARY_WIDTH = 150
+# キャラクター画像の表示倍率と位置補正。未指定なら従来どおり。
+SECRETARY_IMAGE_SCALE = float(_CHARACTER_CONFIG.get("image_scale", _BUILTIN_IMAGE_SCALE))
+SECRETARY_IMAGE_OFFSET_X = float(_CHARACTER_CONFIG.get("image_offset_x", _BUILTIN_IMAGE_OFFSET_X))
+SECRETARY_IMAGE_OFFSET_Y = float(_CHARACTER_CONFIG.get("image_offset_y", _BUILTIN_IMAGE_OFFSET_Y))
 SECRETARY_TALK_INTERVAL = 0.25  # 秒。口の開閉切替周期
 
 def recv_exact(sock: socket.socket, size: int) -> bytes:
@@ -580,7 +590,7 @@ async def main(page: ft.Page):
 
     secretary_image = ft.Image(
         src=SECRETARY_NORMAL,
-        width=SECRETARY_WIDTH,
+        width=SECRETARY_WIDTH * SECRETARY_IMAGE_SCALE,
         fit=ft.BoxFit.CONTAIN,
     )
 
@@ -1347,8 +1357,8 @@ async def main(page: ft.Page):
     # 画像は操作を横取りしない。
     secretary_overlay = ft.Container(
         content=secretary_image,
-        right=8,
-        bottom=64,
+        right=8 - SECRETARY_IMAGE_OFFSET_X,
+        bottom=64 + SECRETARY_IMAGE_OFFSET_Y,
         ignore_interactions=True,
     )
 
